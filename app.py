@@ -1003,11 +1003,11 @@ if st.session_state.trigger_clear:
     st.session_state.voice_text = ""
     st.session_state.trigger_clear = False
 
+# Use voice_text directly as the text area value without conflicting key
 message_input = st.text_area(
     "Enter an SMS message (or use voice above) ⌨️ Ctrl+Enter to analyze", 
     value=st.session_state.voice_text, 
-    height=150,
-    key="message_input_field"
+    height=150
 )
 
 # Update session state if user manually edits
