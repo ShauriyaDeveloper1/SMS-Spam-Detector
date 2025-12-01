@@ -1,0 +1,16 @@
+pandas
+numpy
+matplotlib
+seaborn
+nltk
+wordcloud
+joblib
+scikit-learn
+scipy
+streamlit
+plotly
+audio-recorder-streamlit
+SpeechRecognition
+gTTS
+langdetect
+deep-translator
