@@ -756,10 +756,24 @@ with st.sidebar:
     run_batch = st.button("Run Batch Prediction")
 
 if batch_file and run_batch and models_loaded:
-    batch_df = pd.read_csv(batch_file)
+    # Robust CSV read: try utf-8 then fall back
+    try:
+        batch_df = pd.read_csv(batch_file, encoding='utf-8')
+    except UnicodeDecodeError:
+        try:
+            batch_df = pd.read_csv(batch_file, encoding='latin-1')
+        except UnicodeDecodeError:
+            batch_df = pd.read_csv(batch_file, encoding='cp1252')
+
+    # Accept common Kaggle schema (v2 holds the message)
     if 'message' not in batch_df.columns:
-        st.error("Uploaded file must contain a 'message' column")
-    else:
+        if 'v2' in batch_df.columns:
+            batch_df['message'] = batch_df['v2']
+        else:
+            st.error("Uploaded file must contain a 'message' column (or 'v2' from the Kaggle dataset)")
+            batch_df = None
+
+    if batch_df is not None:
         # Add translation for batch processing
         if TRANSLATION_AVAILABLE:
             with st.spinner("🌍 Translating messages..."):
@@ -795,7 +809,15 @@ if text_files and run_batch and models_loaded:
     st.subheader("📄 Bulk Text File Analysis")
     all_results = []
     for txt_file in text_files:
-        content = txt_file.read().decode('utf-8')
+        # Robust decode for text files
+        raw_bytes = txt_file.read()
+        try:
+            content = raw_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            try:
+                content = raw_bytes.decode('latin-1')
+            except UnicodeDecodeError:
+                content = raw_bytes.decode('cp1252', errors='replace')
         
         # Translate if enabled
         if TRANSLATION_AVAILABLE:
@@ -863,6 +885,14 @@ if 'recording_start_time' not in st.session_state:
     st.session_state.recording_start_time = None
 if 'voice_text' not in st.session_state:
     st.session_state.voice_text = ""
+if 'trigger_clear' not in st.session_state:
+    st.session_state.trigger_clear = False
+if 'prediction_history' not in st.session_state:
+    st.session_state.prediction_history = []
+if 'show_history_expanded' not in st.session_state:
+    st.session_state.show_history_expanded = False
+if 'last_audio_bytes' not in st.session_state:
+    st.session_state.last_audio_bytes = None
 
 try:
     from audio_recorder_streamlit import audio_recorder
@@ -878,8 +908,8 @@ try:
         key="audio_recorder"
     )
     
-    # Process voice input when audio is received
-    if audio_bytes:
+    # Process voice input when audio is received (but only if it's new)
+    if audio_bytes and audio_bytes != st.session_state.last_audio_bytes:
         try:
             import speech_recognition as sr
             import wave
@@ -922,9 +952,9 @@ try:
                 else:
                     st.success(f"✅ Transcribed ({duration:.1f}s): {voice_text}")
                 
-                # Store voice text in session state
+                # Store voice text and mark this audio as processed
                 st.session_state.voice_text = voice_text
-                
+                st.session_state.last_audio_bytes = audio_bytes
                 os.unlink(temp_wav.name)
                 
         except sr.UnknownValueError:
@@ -946,15 +976,25 @@ doc.addEventListener('keydown', function(e) {
     // Ctrl+Enter: Trigger analyze
     if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
-        const analyzeBtn = doc.querySelector('button[kind="primary"]');
+        // Prefer button by label text
+        const buttons = Array.from(doc.querySelectorAll('button'));
+        const analyzeBtn = buttons.find(b => (b.innerText || '').includes('Analyze Message')) || doc.querySelector('button[kind="primary"]');
         if (analyzeBtn) analyzeBtn.click();
     }
     
     // Ctrl+L: Clear input
     if (e.ctrlKey && e.key === 'l') {
         e.preventDefault();
-        const textareas = doc.querySelectorAll('textarea');
-        if (textareas.length > 0) textareas[0].value = '';
+        // Click the Clear button to sync server state
+        const buttons = Array.from(doc.querySelectorAll('button'));
+        const clearBtn = buttons.find(b => (b.innerText || '').includes('Clear'));
+        if (clearBtn) {
+            clearBtn.click();
+        } else {
+            // Fallback: wipe first textarea visually
+            const textareas = doc.querySelectorAll('textarea');
+            if (textareas.length > 0) textareas[0].value = '';
+        }
     }
     
     // Ctrl+M: Focus message input
@@ -963,11 +1003,32 @@ doc.addEventListener('keydown', function(e) {
         const textareas = doc.querySelectorAll('textarea');
         if (textareas.length > 0) textareas[0].focus();
     }
+
+    // Ctrl+B: Run Batch Prediction (if button exists)
+    if (e.ctrlKey && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault();
+        const buttons = Array.from(doc.querySelectorAll('button'));
+        const runBatchBtn = buttons.find(b => (b.innerText || '').includes('Run Batch Prediction'));
+        if (runBatchBtn) runBatchBtn.click();
+    }
     
     // Escape: Collapse all expanders
     if (e.key === 'Escape') {
         const expanders = doc.querySelectorAll('[data-testid="stExpander"] details[open]');
         expanders.forEach(exp => exp.removeAttribute('open'));
+    }
+
+    // Ctrl+H: Toggle Prediction History expander
+    if (e.ctrlKey && (e.key === 'h' || e.key === 'H')) {
+        e.preventDefault();
+        const wrappers = Array.from(doc.querySelectorAll('[data-testid=\"stExpander\"]'));
+        const target = wrappers.find(w => (w.innerText || '').includes('Prediction History'));
+        if (target) {
+            const details = target.querySelector('details');
+            if (details) {
+                details.open = !details.open;
+            }
+        }
     }
 });
 </script>
@@ -976,21 +1037,17 @@ doc.addEventListener('keydown', function(e) {
 import streamlit.components.v1 as components
 components.html(keyboard_js, height=0)
 
-# Clear detection
-if st.session_state.trigger_clear:
-    st.session_state.voice_text = ""
-    st.session_state.trigger_clear = False
+# Initialize clear counter for forcing text area reset
+if 'clear_counter' not in st.session_state:
+    st.session_state.clear_counter = 0
 
-# Use voice_text directly as the text area value without conflicting key
+# Use clear counter in key to force widget recreation when cleared
 message_input = st.text_area(
     "Enter an SMS message (or use voice above) ⌨️ Ctrl+Enter to analyze", 
-    value=st.session_state.voice_text, 
-    height=150
+    value=st.session_state.get('voice_text', ''), 
+    height=150,
+    key=f"message_input_{st.session_state.clear_counter}"
 )
-
-# Update session state if user manually edits
-if message_input != st.session_state.voice_text:
-    st.session_state.voice_text = message_input
 
 # Message playground transformations
 with st.expander("Message Playground (optional transforms)"):
@@ -1009,16 +1066,14 @@ with st.expander("Message Playground (optional transforms)"):
         st.text_area("Transformed message (used for analysis if Analyze clicked)", transformed_message, height=120)
 
 # Action buttons row
-col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
+col_btn1, col_btn2 = st.columns([3, 1])
 with col_btn1:
     analyze = st.button("🔍 Analyze Message (Ctrl+Enter)", type="primary", use_container_width=True)
 with col_btn2:
     if st.button("🗑️ Clear (Ctrl+L)", use_container_width=True):
-        st.session_state.trigger_clear = True
+        st.session_state.voice_text = ""
+        st.session_state.clear_counter += 1
         st.rerun()
-with col_btn3:
-    if st.button("⌨️ Shortcuts", use_container_width=True):
-        st.info("Press Ctrl+H to toggle prediction history!")
 
 if analyze:
     target_message = transformed_message if transformed_message else message_input
@@ -1094,16 +1149,27 @@ if analyze:
             'nb_pred': nb_pred,
             'lr_pred': lr_pred
         })
+        # Auto-expand history after a new prediction
+        st.session_state.show_history_expanded = True
 
-        col1, col2 = st.columns(2)
-        with col1:
+        if model_choice == 'Naive Bayes':
             st.markdown("**Naive Bayes Probabilities**")
             st.progress(nb_prob[1])
             st.caption(f"Spam: {nb_prob[1]*100:.2f}% | Ham: {nb_prob[0]*100:.2f}%")
-        with col2:
+        elif model_choice == 'Logistic Regression':
             st.markdown("**Logistic Regression Probabilities**")
             st.progress(lr_prob[1])
             st.caption(f"Spam: {lr_prob[1]*100:.2f}% | Ham: {lr_prob[0]*100:.2f}%")
+        else:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**Naive Bayes Probabilities**")
+                st.progress(nb_prob[1])
+                st.caption(f"Spam: {nb_prob[1]*100:.2f}% | Ham: {nb_prob[0]*100:.2f}%")
+            with col2:
+                st.markdown("**Logistic Regression Probabilities**")
+                st.progress(lr_prob[1])
+                st.caption(f"Spam: {lr_prob[1]*100:.2f}% | Ham: {lr_prob[0]*100:.2f}%")
 
         feat_dict = {f: v for f, v in zip(FEATURES_LIST, result['features'])}
         st.markdown("**Extracted Features**")
