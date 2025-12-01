@@ -1,6 +1,6 @@
 ## 📱 SMS Spam Detection System
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://shauriyadeveloper1-sms-spam-detector-app-kqo03u.streamlit.app/)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://shauriyadeveloper1-sms-spam-detector-app-rdhldy.streamlit.app/)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -8,7 +8,7 @@ A comprehensive, production-ready Streamlit application for SMS spam detection w
 
 ### 🌐 Live Demo
 
-**Try it now:** [https://shauriyadeveloper1-sms-spam-detector-app-kqo03u.streamlit.app/](https://shauriyadeveloper1-sms-spam-detector-app-kqo03u.streamlit.app/)
+**Try it now:** [https://shauriyadeveloper1-sms-spam-detector-app-rdhldy.streamlit.app/](https://shauriyadeveloper1-sms-spam-detector-app-rdhldy.streamlit.app/)
 
 - Create an account and login
 - Test with any SMS message
