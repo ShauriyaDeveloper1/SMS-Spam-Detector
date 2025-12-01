@@ -861,6 +861,8 @@ if 'recording_active' not in st.session_state:
     st.session_state.recording_active = False
 if 'recording_start_time' not in st.session_state:
     st.session_state.recording_start_time = None
+if 'voice_text' not in st.session_state:
+    st.session_state.voice_text = ""
 
 try:
     from audio_recorder_streamlit import audio_recorder
@@ -938,6 +940,9 @@ try:
                 else:
                     timer_placeholder.success(f"✅ Transcribed ({duration:.1f}s): {voice_text}")
                 
+                # Store voice text in session state
+                st.session_state.voice_text = voice_text
+                
                 os.unlink(temp_wav.name)
                 
         except sr.UnknownValueError:
@@ -991,16 +996,20 @@ import streamlit.components.v1 as components
 components.html(keyboard_js, height=0)
 
 # Clear detection
-clear_value = "" if st.session_state.trigger_clear else voice_text
 if st.session_state.trigger_clear:
+    st.session_state.voice_text = ""
     st.session_state.trigger_clear = False
 
 message_input = st.text_area(
     "Enter an SMS message (or use voice above) ⌨️ Ctrl+Enter to analyze", 
-    value=clear_value, 
+    value=st.session_state.voice_text, 
     height=150,
     key="message_input_field"
 )
+
+# Update session state if user manually edits
+if message_input != st.session_state.voice_text:
+    st.session_state.voice_text = message_input
 
 # Message playground transformations
 with st.expander("Message Playground (optional transforms)"):
