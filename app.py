@@ -945,6 +945,9 @@ try:
                 
                 os.unlink(temp_wav.name)
                 
+                # Force rerun to update text area with voice input
+                st.rerun()
+                
         except sr.UnknownValueError:
             timer_placeholder.warning("⚠️ Could not understand audio. Please speak clearly.")
         except sr.RequestError as e:
