@@ -867,12 +867,6 @@ if 'voice_text' not in st.session_state:
 try:
     from audio_recorder_streamlit import audio_recorder
     
-    # Display recording timer if active
-    timer_placeholder = st.empty()
-    if st.session_state.recording_active and st.session_state.recording_start_time:
-        elapsed = (datetime.now() - st.session_state.recording_start_time).total_seconds()
-        timer_placeholder.info(f"⏱️ Recording: {elapsed:.1f}s")
-    
     audio_bytes = audio_recorder(
         text="Click to record",
         recording_color="#e74c3c",
@@ -884,19 +878,8 @@ try:
         key="audio_recorder"
     )
     
-    # Track recording state
-    if audio_bytes is None and not st.session_state.recording_active:
-        # Just started recording
-        st.session_state.recording_active = True
-        st.session_state.recording_start_time = datetime.now()
-        st.rerun()
-    
-    # Process voice input
-    voice_text = ""
+    # Process voice input when audio is received
     if audio_bytes:
-        st.session_state.recording_active = False
-        st.session_state.recording_start_time = None
-        
         try:
             import speech_recognition as sr
             import wave
@@ -913,7 +896,6 @@ try:
                     frames = wav_file.getnframes()
                     rate = wav_file.getframerate()
                     duration = frames / float(rate)
-                    st.session_state.voice_duration = duration
                 
                 # Speech recognition
                 recognizer = sr.Recognizer()
@@ -931,33 +913,29 @@ try:
                     if detected_lang != 'en':
                         trans_result = translate_to_english(voice_text, detected_lang)
                         if trans_result['was_translated']:
-                            timer_placeholder.success(f"✅ Transcribed ({duration:.1f}s) | 🌍 {trans_result['language_name']} → English\n\nOriginal: {voice_text}\nTranslated: {trans_result['translated_text']}")
+                            st.success(f"✅ Transcribed ({duration:.1f}s) | 🌍 {trans_result['language_name']} → English\n\nOriginal: {voice_text}\nTranslated: {trans_result['translated_text']}")
                             voice_text = trans_result['translated_text']
                         else:
-                            timer_placeholder.success(f"✅ Transcribed ({duration:.1f}s): {voice_text}")
+                            st.success(f"✅ Transcribed ({duration:.1f}s): {voice_text}")
                     else:
-                        timer_placeholder.success(f"✅ Transcribed ({duration:.1f}s): {voice_text}")
+                        st.success(f"✅ Transcribed ({duration:.1f}s): {voice_text}")
                 else:
-                    timer_placeholder.success(f"✅ Transcribed ({duration:.1f}s): {voice_text}")
+                    st.success(f"✅ Transcribed ({duration:.1f}s): {voice_text}")
                 
                 # Store voice text in session state
                 st.session_state.voice_text = voice_text
                 
                 os.unlink(temp_wav.name)
                 
-                # Force rerun to update text area with voice input
-                st.rerun()
-                
         except sr.UnknownValueError:
-            timer_placeholder.warning("⚠️ Could not understand audio. Please speak clearly.")
+            st.warning("⚠️ Could not understand audio. Please speak clearly.")
         except sr.RequestError as e:
-            timer_placeholder.error(f"❌ Google Speech API error: {e}")
+            st.error(f"❌ Google Speech API error: {e}")
         except Exception as e:
-            timer_placeholder.warning(f"⚠️ Voice error: {str(e)}")
+            st.warning(f"⚠️ Voice error: {str(e)}")
             
 except ImportError:
     st.info("📝 Voice input requires 'audio-recorder-streamlit' package. Using text input only.")
-    voice_text = ""
 
 # Keyboard shortcuts implementation using custom JS
 keyboard_js = """
