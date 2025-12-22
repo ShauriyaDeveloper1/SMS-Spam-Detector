@@ -893,6 +893,8 @@ if 'show_history_expanded' not in st.session_state:
     st.session_state.show_history_expanded = False
 if 'last_audio_bytes' not in st.session_state:
     st.session_state.last_audio_bytes = None
+if 'voice_counter' not in st.session_state:
+    st.session_state.voice_counter = 0
 
 try:
     from audio_recorder_streamlit import audio_recorder
@@ -955,6 +957,7 @@ try:
                 # Store voice text and mark this audio as processed
                 st.session_state.voice_text = voice_text
                 st.session_state.last_audio_bytes = audio_bytes
+                st.session_state.voice_counter += 1
                 os.unlink(temp_wav.name)
                 
         except sr.UnknownValueError:
@@ -1041,12 +1044,13 @@ components.html(keyboard_js, height=0)
 if 'clear_counter' not in st.session_state:
     st.session_state.clear_counter = 0
 
-# Use clear counter in key to force widget recreation when cleared
+# Use combined counter (clear + voice) in key to force widget recreation
+widget_key = f"message_input_{st.session_state.clear_counter}_{st.session_state.get('voice_counter', 0)}"
 message_input = st.text_area(
     "Enter an SMS message (or use voice above) ⌨️ Ctrl+Enter to analyze", 
     value=st.session_state.get('voice_text', ''), 
     height=150,
-    key=f"message_input_{st.session_state.clear_counter}"
+    key=widget_key
 )
 
 # Message playground transformations
