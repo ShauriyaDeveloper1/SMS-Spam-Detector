@@ -7,10 +7,11 @@ wordcloud
 joblib
 scikit-learn
 scipy
-streamlit
+streamlit>=1.39.0
 plotly
 audio-recorder-streamlit
 SpeechRecognition
 gTTS
 langdetect
 deep-translator
+standard-imghdr
